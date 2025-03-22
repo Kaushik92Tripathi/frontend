@@ -1,6 +1,6 @@
 import { Todo, updateTodo, deleteTodo } from '@/lib/api';
 import { useState } from 'react';
-import { FaEdit, FaTrash, FaCheck, FaTimes } from 'react-icons/fa';
+import { FaEdit, FaTrash, FaCheck, FaTimes, FaClock } from 'react-icons/fa';
 
 interface TodoItemProps {
   todo: Todo;
@@ -10,95 +10,156 @@ interface TodoItemProps {
 export default function TodoItem({ todo, onUpdate }: TodoItemProps) {
   const [editing, setEditing] = useState(false);
   const [title, setTitle] = useState(todo.title);
-  const [description, setDescription] = useState(todo.description);
+  const [description, setDescription] = useState(todo.description || '');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleToggleComplete = async () => {
-    await updateTodo(todo.id, { ...todo, completed: !todo.completed });
-    onUpdate();
+    setIsLoading(true);
+    try {
+      await updateTodo(todo.id, { ...todo, completed: !todo.completed });
+      onUpdate();
+    } catch (error) {
+      console.error('Failed to update todo:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleDelete = async () => {
-    await deleteTodo(todo.id);
-    onUpdate();
+    if (!confirm('Are you sure you want to delete this task?')) return;
+    
+    setIsLoading(true);
+    try {
+      await deleteTodo(todo.id);
+      onUpdate();
+    } catch (error) {
+      console.error('Failed to delete todo:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSave = async () => {
-    await updateTodo(todo.id, { title, description });
-    setEditing(false);
-    onUpdate();
+    if (!title.trim()) return;
+    
+    setIsLoading(true);
+    try {
+      await updateTodo(todo.id, { title, description });
+      setEditing(false);
+      onUpdate();
+    } catch (error) {
+      console.error('Failed to update todo:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return new Intl.DateTimeFormat('en-US', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    }).format(date);
   };
 
   return (
-    <div className="border p-4 rounded-md my-2 bg-white shadow-sm">
+    <div className={`todo-item ${todo.completed ? 'completed' : ''}`}>
       {editing ? (
-        <div className="space-y-2">
+        <div className="p-4">
           <input
             type="text"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="w-full border p-2 rounded"
+            className="form-control mb-3"
+            placeholder="Task title"
           />
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
-            className="w-full border p-2 rounded"
-            rows={2}
+            className="form-control mb-4"
+            rows={3}
+            placeholder="Task description"
           />
-          <div className="flex justify-end space-x-2 mt-2">
-            <button
-              onClick={handleSave}
-              className="bg-green-500 text-white p-2 rounded-md flex items-center"
-            >
-              <FaCheck className="mr-1" /> Save
-            </button>
+          <div className="flex justify-end space-x-3">
             <button
               onClick={() => setEditing(false)}
-              className="bg-gray-500 text-white p-2 rounded-md flex items-center"
+              className="btn px-4 py-2 border border-border"
+              disabled={isLoading}
             >
-              <FaTimes className="mr-1" /> Cancel
+              <FaTimes className="mr-2" /> Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              className="btn btn-primary px-4 py-2"
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <span className="animate-pulse">Saving...</span>
+              ) : (
+                <>
+                  <FaCheck className="mr-2" /> Save Changes
+                </>
+              )}
             </button>
           </div>
         </div>
       ) : (
-        <div>
-          <div className="flex justify-between items-start">
-            <div>
-              <h3
-                className={`text-lg font-semibold ${
-                  todo.completed ? 'line-through text-gray-500' : ''
-                }`}
-              >
-                {todo.title}
-              </h3>
-              <p className="text-gray-600">{todo.description}</p>
-              <p className="text-xs text-gray-400 mt-2">
-                {new Date(todo.created_at).toLocaleString()}
-              </p>
-            </div>
+        <>
+          <div className="todo-item-header">
+            <h3 className={`text-lg font-medium ${todo.completed ? 'line-through text-muted' : ''}`}>
+              {todo.title}
+            </h3>
             <div className="flex space-x-2">
               <button
-                onClick={handleToggleComplete}
-                className={`p-2 rounded-md ${
-                  todo.completed ? 'bg-yellow-500' : 'bg-green-500'
-                } text-white`}
-              >
-                {todo.completed ? 'Undo' : 'Complete'}
-              </button>
-              <button
                 onClick={() => setEditing(true)}
-                className="bg-blue-500 text-white p-2 rounded-md"
+                className="btn p-2 text-primary hover:bg-secondary rounded-md"
+                disabled={isLoading}
+                title="Edit task"
               >
                 <FaEdit />
               </button>
               <button
                 onClick={handleDelete}
-                className="bg-red-500 text-white p-2 rounded-md"
+                className="btn p-2 text-danger hover:bg-secondary rounded-md"
+                disabled={isLoading}
+                title="Delete task"
               >
                 <FaTrash />
               </button>
             </div>
           </div>
-        </div>
+          
+          {description && (
+            <div className="todo-item-body">
+              <p className={`text-sm ${todo.completed ? 'text-muted' : ''}`}>
+                {description}
+              </p>
+            </div>
+          )}
+          
+          <div className="todo-item-footer">
+            <span className="flex items-center text-xs">
+              <FaClock className="mr-1" /> {formatDate(todo.created_at)}
+            </span>
+            
+            <button
+              onClick={handleToggleComplete}
+              className={`badge ${todo.completed ? 'badge-success' : 'badge-default'}`}
+              disabled={isLoading}
+            >
+              {isLoading ? (
+                <span className="animate-pulse">Updating...</span>
+              ) : todo.completed ? (
+                'Completed'
+              ) : (
+                'Mark Complete'
+              )}
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
